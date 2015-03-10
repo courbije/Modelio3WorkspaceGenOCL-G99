@@ -104,14 +104,39 @@ def umlEnumeration2OCL(enumeration):
     """
     Generate USE OCL code for the enumeration
     """
+    print "%s" % enumeration
 
 def umlBasicType2OCL(basicType):
     """
     Generate USE OCL basic type. Note that
     type conversions are required.
     """
+    t = basicType.getName()
+    if (t == "integer") :
+        return "Integer"
+    elif (t == "string") :
+        return "String"    
+    elif (t == "boolean") :
+        return "Boolean"
+    elif (t == "float") :
+        return "Real"
+    else:
+        return t
+        
     
-# etc.
+def umlAttribute2OCL(attribute):
+    a = attribute.getName()
+    b = umlBasicType2OCL(attribute.getType())
+    print "\t" + a + " : " + b
+    
+def umlClass2OCL(clas):
+    """
+    Generate USE OCL code for the class
+    """
+    print "class %s" % clas.getName()
+    print "attributes"    
+    for attribute in clas.getOwnedAttribute():
+        umlAttribute2OCL(attribute)
 
 def package2OCL(package):
     """
@@ -124,6 +149,15 @@ def package2OCL(package):
     might exist is not reflected in the USE OCL specification
     as USE is not supporting the concept of package.
     """
+    for c in package.getOwnedElement():
+      if isinstance(c, Enumeration) :
+         umlEnumeration2OCL(c)
+      if isinstance(c, Class) :
+         umlClass2OCL(c)
+    
+for c in selectedElements:
+   for package in c.getOwnedElement():
+      package2OCL(package)
 
 
 
