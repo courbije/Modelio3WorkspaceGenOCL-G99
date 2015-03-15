@@ -68,6 +68,13 @@ def associationsInPackage(package):
         arrive to a class which is recursively contained in
         a package.
     """
+    listAsso = []
+    for clas in package.getOwnedElement():
+        for assoEnd in clas.getOwnedEnd():
+            asso = assoEnd.getAssociation()
+            if asso not in listAsso :
+                listAsso.append(asso)
+    return listAsso
 
 
 #---------------------------------------------------------
@@ -102,7 +109,7 @@ def associationsInPackage(package):
 def umlEnumeration2OCL(enumeration):
     """
         Generate USE OCL code for the enumeration
-        """
+    """
     x=""
     print "enum %s {" % enumeration.getName()
     for e in enumeration.getValue():
@@ -117,7 +124,7 @@ def umlBasicType2OCL(basicType):
         type conversions are required.
     """
     t = basicType.getName()
-    if (t == "integer") :
+    if (t == "integer" or t=="") :
         return "Integer"
     elif (t == "string") :
         return "String"
@@ -131,6 +138,9 @@ def umlBasicType2OCL(basicType):
 
 
 def umlOperations2OCL(operations):
+    """
+        Generate USE OCL code for all operation of a class
+    """
     if (operations):
         print "operation"
     for operation in operations:
@@ -149,6 +159,9 @@ def umlOperations2OCL(operations):
 
 
 def umlAttributes2OCL(attributes):
+    """
+        Generate USE OCL code for all attributes of a class
+    """
     if (attributes):
         print "attributes"
     for attribute in attributes:
@@ -161,12 +174,47 @@ def umlClass2OCL(clas):
     """
         Generate USE OCL code for the class
     """
-
     abstract = " abstract" if clas.isAbstract else ""
     print "%sclass %s" % (abstract,clas.getName())
     umlAttributes2OCL(clas.getOwnedAttribute())
     umlOperations2OCL(clas.getOwnedOperation())
     print "end\n"
+
+def umlAssociation2OCL(association):
+    """
+        Generate USE OCL code for the association
+    """
+    #type
+    type = "association"
+    for end in association.getEnd():
+        if end.getAggregation() == AggregationKind.KINDISCOMPOSITION:
+            type = "composition"
+        if end.getAggregation() == AggregationKind.KINDISAGGREGATION:
+            type = "aggregation"
+
+    print "%s %s between" % (type, association.getName())
+
+    for end in association.getEnd():
+        class_name = end.getOppositeOwner().getOwner().getName()
+        
+        #cardinality
+        min = end.getMultiplicityMin()
+        max = end.getMultiplicityMax()
+        max = min if max == "" else max
+        if max == min :
+            multiplicity = "[%s]" % min
+        elif min == "" :
+            multiplicity = ""
+        elif max == "*" and min == "0" :
+            multiplicity = "[%s]" % max
+        else :
+            multiplicity = "[%s..%s]" % (min,max)
+
+        role_name = end.getName()
+        role = "" if role_name == "" else "role "+role_name
+        order = " ordered" if end.isOrdered else ""
+        print "\t%s%s %s%s" % (class_name,multiplicity,role,order)
+    print "end"
 
 
 def package2OCL(package):
@@ -185,6 +233,10 @@ def package2OCL(package):
             umlEnumeration2OCL(c)
         if isinstance(c, Class):
             umlClass2OCL(c)
+    for asso in associationsInPackage(package):
+         umlAssociation2OCL(asso)
+
+
 
 #for c in selectedElements:
 #   for package in c.getOwnedElement():
