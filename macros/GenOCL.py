@@ -72,7 +72,7 @@ def associationsInPackage(package):
     for clas in package.getOwnedElement():
         for assoEnd in clas.getOwnedEnd():
             asso = assoEnd.getAssociation()
-            if asso not in listAsso :
+            if asso not in listAsso and not asso.getLinkToClass() :
                 listAsso.append(asso)
     return listAsso
 
@@ -167,7 +167,19 @@ def umlAttributes2OCL(attributes):
     for attribute in attributes:
         name = attribute.getName()
         type = umlBasicType2OCL(attribute.getType())
-        annotation = "-- @derived" if attribute.isDerived else ""
+        annotation = ""
+        if attribute.isDerived :
+            annotation += " @derived"
+        if attribute.getVisibility() == VisibilityMode.PUBLIC :
+            annotation += " @Public"
+        elif attribute.getVisibility() == VisibilityMode.PRIVATE :
+            annotation += " @Private"
+        elif attribute.getVisibility() == VisibilityMode.PACKAGEVISIBILITY :
+            annotation += " @Package"
+        elif attribute.getVisibility() == VisibilityMode.PROTECTED :
+            annotation += " @Protected"
+
+        annotation = "" if annotation=="" else "  -- " + annotation
         print "\t%s : %s%s" % (name ,type,annotation)
 
 def umlClass2OCL(clas):
@@ -175,10 +187,35 @@ def umlClass2OCL(clas):
         Generate USE OCL code for the class
     """
     abstract = " abstract" if clas.isAbstract else ""
-    print "%sclass %s" % (abstract,clas.getName())
+    if not clas.getLinkToAssociation() :
+        print "%sclass %s" % (abstract,clas.getName())
+    else :
+        print "%sassociationclass %s between" % (abstract,clas.getName())
+        for end in clas.getLinkToAssociation().getAssociationPart().getEnd():
+            umlAssociationEnd2OCL(end)
     umlAttributes2OCL(clas.getOwnedAttribute())
     umlOperations2OCL(clas.getOwnedOperation())
     print "end\n"
+
+def umlAssociationEnd2OCL(end):
+    class_name = end.getOppositeOwner().getOwner().getName()
+    #cardinality
+    min = end.getMultiplicityMin()
+    max = end.getMultiplicityMax()
+    max = min if max == "" else max
+    if max == min :
+        multiplicity = "[%s]" % min
+    elif min == "" :
+        multiplicity = ""
+    elif max == "*" and min == "0" :
+        multiplicity = "[%s]" % max
+    else :
+        multiplicity = "[%s..%s]" % (min,max)
+    
+    role_name = end.getName()
+    role = "" if role_name == "" else "role "+role_name
+    order = " ordered" if end.isOrdered else ""
+    print "\t%s%s %s%s" % (class_name,multiplicity,role,order)
 
 def umlAssociation2OCL(association):
     """
@@ -192,29 +229,13 @@ def umlAssociation2OCL(association):
         if end.getAggregation() == AggregationKind.KINDISAGGREGATION:
             type = "aggregation"
 
-    print "%s %s between" % (type, association.getName())
+    name = association.getName()
+    name = association.getUuid().toString() if name=="" else name
+    print "%s %s between" % (type, name)
 
     for end in association.getEnd():
-        class_name = end.getOppositeOwner().getOwner().getName()
-        
-        #cardinality
-        min = end.getMultiplicityMin()
-        max = end.getMultiplicityMax()
-        max = min if max == "" else max
-        if max == min :
-            multiplicity = "[%s]" % min
-        elif min == "" :
-            multiplicity = ""
-        elif max == "*" and min == "0" :
-            multiplicity = "[%s]" % max
-        else :
-            multiplicity = "[%s..%s]" % (min,max)
-
-        role_name = end.getName()
-        role = "" if role_name == "" else "role "+role_name
-        order = " ordered" if end.isOrdered else ""
-        print "\t%s%s %s%s" % (class_name,multiplicity,role,order)
-    print "end"
+        umlAssociationEnd2OCL(end)
+    print "end\n"
 
 
 def package2OCL(package):
