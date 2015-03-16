@@ -61,7 +61,7 @@ def isAssociationClass(element):
 # intended to be reusable.
 #---------------------------------------------------------
 
-# example
+
 def associationsInPackage(package):
     """
         Return the list of all associations that start or
@@ -70,9 +70,27 @@ def associationsInPackage(package):
     """
     listAsso = []
     for clas in package.getOwnedElement():
-        for assoEnd in clas.getOwnedEnd():
-            asso = assoEnd.getAssociation()
-            if asso not in listAsso and not asso.getLinkToClass() :
+        if isinstance(clas, Class) :
+            for assoEnd in clas.getOwnedEnd():
+                asso = assoEnd.getAssociation()
+                if asso not in listAsso and isinstance(asso, Association) and not asso.getLinkToClass()  :
+                    listAsso.append(asso)
+            for assoEnd in clas.getOwnedNaryEnd():
+                asso = assoEnd.getNaryAssociation()
+                if asso not in listAsso :
+                    listAsso.append(asso)
+    return listAsso
+
+def associationsInPackages(packages):
+    """
+        Return the list of all associations that start or
+        arrive to a class which is recursively contained in
+        all package.
+    """
+    listAsso = []
+    for package in packages.getOwnedElement():
+        for asso in associationsInPackage(package) :
+            if asso not in listAsso :
                 listAsso.append(asso)
     return listAsso
 
@@ -142,7 +160,7 @@ def umlOperations2OCL(operations):
         Generate USE OCL code for all operation of a class
     """
     if (operations):
-        print "operation"
+        print "operations"
     for operation in operations:
         name = operation.getName()
         
@@ -186,9 +204,13 @@ def umlClass2OCL(clas):
     """
         Generate USE OCL code for the class
     """
-    abstract = " abstract" if clas.isAbstract else ""
+    abstract = "abstract " if clas.isAbstract else ""
     if not clas.getLinkToAssociation() :
-        print "%sclass %s" % (abstract,clas.getName())
+        inheritance = ""
+        for parent in clas.getParent() :
+            inheritance += " %s,"  % parent.getSuperType().getName()
+        inheritance = "" if inheritance == "" else  " <" + inheritance[:-1]
+        print "%sclass %s%s" % (abstract,clas.getName(),inheritance)
     else :
         print "%sassociationclass %s between" % (abstract,clas.getName())
         for end in clas.getLinkToAssociation().getAssociationPart().getEnd():
@@ -198,7 +220,10 @@ def umlClass2OCL(clas):
     print "end\n"
 
 def umlAssociationEnd2OCL(end):
-    class_name = end.getOppositeOwner().getOwner().getName()
+    if isinstance(end, AssociationEnd) :
+        class_name = end.getOppositeOwner().getOwner().getName()
+    else :
+        class_name = end.getOwner().getName()
     #cardinality
     min = end.getMultiplicityMin()
     max = end.getMultiplicityMax()
@@ -214,7 +239,7 @@ def umlAssociationEnd2OCL(end):
     
     role_name = end.getName()
     role = "" if role_name == "" else "role "+role_name
-    order = " ordered" if end.isOrdered else ""
+    order = " ordered" if end.isIsOrdered() else ""
     print "\t%s%s %s%s" % (class_name,multiplicity,role,order)
 
 def umlAssociation2OCL(association):
@@ -223,19 +248,26 @@ def umlAssociation2OCL(association):
     """
     #type
     type = "association"
-    for end in association.getEnd():
-        if end.getAggregation() == AggregationKind.KINDISCOMPOSITION:
-            type = "composition"
-        if end.getAggregation() == AggregationKind.KINDISAGGREGATION:
-            type = "aggregation"
+    if isinstance(association, Association) :
+        for end in association.getEnd():
+            if end.getAggregation() == AggregationKind.KINDISCOMPOSITION:
+                type = "composition"
+            if end.getAggregation() == AggregationKind.KINDISAGGREGATION:
+                type = "aggregation"
 
     name = association.getName()
     name = association.getUuid().toString() if name=="" else name
     print "%s %s between" % (type, name)
 
-    for end in association.getEnd():
-        umlAssociationEnd2OCL(end)
+    if isinstance(association, Association) :
+        for end in association.getEnd():
+            umlAssociationEnd2OCL(end)
+    else :
+        for end in association.getNaryEnd():
+            umlAssociationEnd2OCL(end)
+
     print "end\n"
+
 
 
 def package2OCL(package):
@@ -248,22 +280,43 @@ def package2OCL(package):
         specification. The possibly nested package structure that
         might exist is not reflected in the USE OCL specification
         as USE is not supporting the concept of package.
-    """
+        """
     for c in package.getOwnedElement():
         if isinstance(c, Enumeration) :
             umlEnumeration2OCL(c)
         if isinstance(c, Class):
             umlClass2OCL(c)
     for asso in associationsInPackage(package):
-         umlAssociation2OCL(asso)
+        umlAssociation2OCL(asso)
 
 
+def packages2OCL(packages):
+    """
+        Generate a complete OCL specification for all packages
+    """
+    for package in packages.getOwnedElement():
+        for c in package.getOwnedElement():
+            if isinstance(c, Enumeration) :
+                umlEnumeration2OCL(c)
 
-#for c in selectedElements:
-#   for package in c.getOwnedElement():
-#      package2OCL(package)
-for package in selectedElements:
-    package2OCL(package)
+    for package in packages.getOwnedElement():
+        for c in package.getOwnedElement():
+            if isinstance(c, Class):
+                umlClass2OCL(c)
+
+    for asso in associationsInPackages(packages):
+        umlAssociation2OCL(asso)
+
+def main():
+    for c in selectedElements:
+        print "\nmodel %s\n\n" % c.getName()
+        packages2OCL(c)
+
+def test():
+    for c in selectedElements:
+        package2OCL(c)
+
+test()
 
 
 
